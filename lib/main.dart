@@ -113,7 +113,6 @@ Future<void> insertConfig(int time) async {
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   getLocationPermission();
-  _initForeTask();
 
   runApp(const MyApp());
 }
@@ -150,7 +149,11 @@ class _MyHomePageState extends State<MyHomePage> {
   final TextEditingController _controller = TextEditingController(text: "20");
   final TextEditingController _sendToDBController = TextEditingController(text: "60");
   final List<PositionDataEntity> positions = [];
+  final streamController = StreamController<dynamic>.broadcast();
   PositionDataEntity? startPosition;
+  StreamSubscription? subscription;
+
+
   final clients = [
     ClientsEntity(const LatLng(-19.8762674, -44.0134774), "Pague Menos"),
     ClientsEntity(const LatLng(-19.8776928, -44.0218306), "Hexa Farma"),
@@ -163,29 +166,33 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   void initState() {
     super.initState();
-    _initForeTask();
     _port = FlutterForegroundTask.receivePort;
-    _port?.listen((dynamic data) async {
-      //RETORNO DO FOREGROUND TASK
-      if(data is Map<String, dynamic>){
-        final pos = PositionDataEntity.fromMap(data);
-        await database.insertPosition(pos);
-        final posDate = positions.where((element) => element.syncedAt != null).lastOrNull;
-        if(posDate == null || DateTime.now().difference(posDate.syncedAt!).inSeconds >= int.parse(_sendToDBController.text)){
-          await database.insertPosition(pos);
-          await database.updateSyncedPosition();
-        }
-      }
-    });
-
-    database.getAllPosition().listen((event) {
-      setState(() {
-        positions.clear();
-        positions.addAll(event.map((e) => PositionDataEntity.fromEntity(e)).toList());
-        startPosition ??= positions.first;
-      });
+    //ajuste tecnico (gambiarra)
+    _port!.listen((message) {
+      streamController.sink.add(message);
     });
   }
+
+
+  Future<void> setListenToSinc(int time) async {
+    if(subscription != null){
+      await subscription?.cancel();
+      subscription = null;
+    }
+
+    subscription ??= streamController.stream.listen((dynamic data) async {
+
+        if(data is Map<String, dynamic>){
+          final pos = PositionDataEntity.fromMap(data);
+          await database.insertPosition(pos);
+          final posDate = positions.where((element) => element.syncedAt != null).lastOrNull;
+          if(posDate == null || DateTime.now().difference(posDate.syncedAt!).inSeconds >= time){
+            await database.updateSyncedPosition();
+          }
+        }
+      });
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -199,13 +206,13 @@ class _MyHomePageState extends State<MyHomePage> {
           children: [
             Row(
               children: [
-                const Text("Tempo de coleta:"),
+                const Text("Tempo de coleta (s):"),
                 const SizedBox(
                   width: 10,
                 ),
                 SizedBox(
-                  width: 80,
-                  height: 40,
+                  width: 50,
+                  height: 30,
                   child: TextFormField(
                     controller: _controller,
                     decoration: const InputDecoration(
@@ -234,19 +241,71 @@ class _MyHomePageState extends State<MyHomePage> {
             const SizedBox(
               height: 10,
             ),
-            ElevatedButton(
-                onPressed: () async {
-                  await database.deletePosition();
-                  setState(() {
-                    positions.clear();
-                  });
-                },
-                child: const Text("Limpar")),
+            Row(
+              children: [
+                const Text("Tempo de sinc. (s):"),
+                const SizedBox(
+                  width: 10,
+                ),
+                SizedBox(
+                  width: 50,
+                  height: 30,
+                  child: TextFormField(
+                    controller: _sendToDBController,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                const SizedBox(
+                  width: 10,
+                ),
+                ElevatedButton(
+                    onPressed: () {
+                      setListenToSinc(int.parse(_sendToDBController.text));
+                    },
+                    child: const Text("Atualizar"))
+              ],
+            ),
+            const SizedBox(
+              height: 10,
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton(
+                    onPressed: () async {
+                      _initForeTask();
+                      setListenToSinc(int.parse(_sendToDBController.text));
+                      database.getAllPosition().listen((event) {
+                        positions.clear();
+                        setState(() {
+                          positions.addAll(event.map((e) => PositionDataEntity.fromEntity(e)).toList());
+                          if(positions.isNotEmpty){
+                            startPosition = positions.first;
+                          }
+                        });
+                      });
+                    },
+                    child: const Text("Iniciar")),
+                const SizedBox(
+                  width: 10,
+                ),
+                ElevatedButton(
+                    onPressed: () async {
+                      await database.deletePosition();
+                      setState(() {
+                        positions.clear();
+                      });
+                    },
+                    child: const Text("Limpar")),
+              ],
+            ),
             const SizedBox(
               height: 10,
             ),
             Expanded(
-              child: FlutterMap(
+              child: positions.isEmpty ? const Center(child: Text("Sem dados"),) : FlutterMap(
                 mapController: MapController(),
                 options: MapOptions(
                   interactionOptions:
