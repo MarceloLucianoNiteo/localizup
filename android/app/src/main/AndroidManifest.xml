@@ -1,14 +1,17 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
-    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <application
-        android:label="localizup"
-        android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
-        <service
-                android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
-                android:stopWithTask="true" />
+            android:label="localizup"
+            android:name="${applicationName}"
+            android:icon="@mipmap/ic_launcher">
+        <service android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
+                 android:permission="android.permission.FOREGROUND_SERVICE"
+                 android:exported="true"
+                 android:foregroundServiceType = "location"/>
 
         <activity
             android:name=".MainActivity"
@@ -36,5 +39,7 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <meta-data android:name="com.google.android.geo.API_KEY"
+                   android:value="AIzaSyAd14lS11kSj0CEWbN8uR8AO39uR1ftGgs"/>
     </application>
 </manifest>

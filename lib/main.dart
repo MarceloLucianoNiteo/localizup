@@ -4,9 +4,8 @@ import 'dart:isolate';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
-import 'package:flutter_map/flutter_map.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
-import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 
 import 'db.dart';
@@ -54,7 +53,10 @@ class PositionDataEntity {
           position: LatLng(
               double.parse(entity.latitude), double.parse(entity.longitude)),
           dateTime: DateTime.parse(entity.date),
-          id: entity.id, syncedAt: entity.syncedAt != null ? DateTime.parse(entity.syncedAt!) : null);
+          id: entity.id,
+          syncedAt: entity.syncedAt != null
+              ? DateTime.parse(entity.syncedAt!)
+              : null);
 
   factory PositionDataEntity.fromMap(Map<String, dynamic> map) =>
       PositionDataEntity(
@@ -63,14 +65,15 @@ class PositionDataEntity {
           id: map['id'],
           syncedAt: map['syncedAt']);
 
-
   Map<String, dynamic> toMap() {
     return {
       'id': id,
       'latitude': position.latitude,
       'longitude': position.longitude,
       'date': DateFormat('yyyyMMddTHHmmss').format(dateTime),
-      'syncedAt': syncedAt != null ? DateFormat('yyyyMMddTHHmmss').format(syncedAt!) : null,
+      'syncedAt': syncedAt != null
+          ? DateFormat('yyyyMMddTHHmmss').format(syncedAt!)
+          : null,
     };
   }
 }
@@ -147,12 +150,12 @@ class _MyHomePageState extends State<MyHomePage> {
   ReceivePort? _port;
   int? index;
   final TextEditingController _controller = TextEditingController(text: "20");
-  final TextEditingController _sendToDBController = TextEditingController(text: "60");
+  final TextEditingController _sendToDBController =
+      TextEditingController(text: "60");
   final List<PositionDataEntity> positions = [];
   final streamController = StreamController<dynamic>.broadcast();
   PositionDataEntity? startPosition;
   StreamSubscription? subscription;
-
 
   final clients = [
     ClientsEntity(const LatLng(-19.8762674, -44.0134774), "Pague Menos"),
@@ -167,32 +170,30 @@ class _MyHomePageState extends State<MyHomePage> {
   void initState() {
     super.initState();
     _port = FlutterForegroundTask.receivePort;
-    //ajuste tecnico (gambiarra)
+    database.getAll();
     _port!.listen((message) {
       streamController.sink.add(message);
     });
   }
 
-
   Future<void> setListenToSinc(int time) async {
-    if(subscription != null){
+    if (subscription != null) {
       await subscription?.cancel();
       subscription = null;
     }
 
     subscription ??= streamController.stream.listen((dynamic data) async {
-
-        if(data is Map<String, dynamic>){
-          final pos = PositionDataEntity.fromMap(data);
-          await database.insertPosition(pos);
-          final posDate = positions.where((element) => element.syncedAt != null).lastOrNull;
-          if(posDate == null || DateTime.now().difference(posDate.syncedAt!).inSeconds >= time){
-            await database.updateSyncedPosition();
-          }
+      if (data is Map<String, dynamic>) {
+        final pos = PositionDataEntity.fromMap(data);
+        final posDate =
+            positions.where((element) => element.syncedAt != null).lastOrNull;
+        if (posDate == null ||
+            DateTime.now().difference(posDate.syncedAt!).inSeconds >= time) {
+          await database.updateSyncedPosition();
         }
-      });
+      }
+    });
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -280,8 +281,10 @@ class _MyHomePageState extends State<MyHomePage> {
                       database.getAllPosition().listen((event) {
                         positions.clear();
                         setState(() {
-                          positions.addAll(event.map((e) => PositionDataEntity.fromEntity(e)).toList());
-                          if(positions.isNotEmpty){
+                          positions.addAll(event
+                              .map((e) => PositionDataEntity.fromEntity(e))
+                              .toList());
+                          if (positions.isNotEmpty) {
                             startPosition = positions.first;
                           }
                         });
@@ -305,70 +308,8 @@ class _MyHomePageState extends State<MyHomePage> {
               height: 10,
             ),
             Expanded(
-              child: positions.isEmpty ? const Center(child: Text("Sem dados"),) : FlutterMap(
-                mapController: MapController(),
-                options: MapOptions(
-                  interactionOptions:
-                  const InteractionOptions(scrollWheelVelocity: 2),
-                  onTap: (point, latlng) {
-                    if (index != null) {
-                      positions[index!].position = latlng;
-                      database.updatePosition(positions[index!]);
-                      setState(() {
-                        index = null;
-                      });
-                    }
-                  },
-                  initialCenter: startPosition!.position,
-                  initialZoom: 9.2,
-                ),
-                children: [
-                  TileLayer(
-                    urlTemplate:
-                    "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-                    subdomains: const ['a', 'b', 'c'],
-                  ),
-                  MarkerLayer(
-                      markers: List.generate(
-                          positions.length,
-                              (index) => Marker(
-                            width: 30,
-                            height: 27,
-                            alignment: Alignment.topCenter,
-                            point: positions[index].position,
-                            child: GestureDetector(
-                                onLongPress: () {
-                                  setState(() {
-                                    this.index = index;
-                                  });
-                                },
-                                child: Icon(
-                                  Icons.location_on,
-                                  color: this.index == index
-                                      ? Colors.green
-                                      : positions[index].syncedAt != null ? Colors.blue : Colors.red,
-                                  size: 30,
-                                )),
-                          ))),
-                  MarkerLayer(
-                      markers: List.generate(
-                          clients.length,
-                              (index) => Marker(
-                            width: 30,
-                            height: 27,
-                            alignment: Alignment.topCenter,
-                            point: clients[index].position,
-                            child: Tooltip(
-                                message: clients[index].name,
-                                child: const Icon(
-                                  Icons.local_hospital,
-                                  color: Colors.blue,
-                                  size: 30,
-                                )),
-                          ))),
-                ],
-              ),
-            )
+              child: Image.network("https://maps.googleapis.com/maps/api/staticmap?center=Brooklyn+Bridge,New+York,NY&zoom=13&size=600x300&maptype=roadmap&markers=color:blue%7Clabel:S%7C40.702147,-74.015794&markers=color:green%7Clabel:G%7C40.711614,-74.012318&markers=color:red%7Clabel:C%7C40.718217,-73.998284&key=AIzaSyAd14lS11kSj0CEWbN8uR8AO39uR1ftGgs") ,
+            ),
           ],
         ), // This trailing comma makes auto-formatting nicer for build methods.
       ),
@@ -400,8 +341,11 @@ class FirstTaskHandler extends TaskHandler {
   // Called every [interval] milliseconds in [ForegroundTaskOptions].
   @override
   void onRepeatEvent(DateTime timestamp, SendPort? sendPort) async {
-    final pos = await _getPosition();
-    _sendPort?.send(pos.toMap());
+    //final pos = await _getPosition();
+    await insertPosition();
+    database.getAll();
+    print("Collected");
+    //_sendPort?.send();
   }
 
   // Called when the notification button on the Android platform is pressed.

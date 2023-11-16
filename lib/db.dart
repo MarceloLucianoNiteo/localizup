@@ -47,6 +47,11 @@ class DatabaseOperation {
     return data;
   }
 
+  getAll()async{
+    final data = await database.select(database.positionEntities).get();
+    print(data.length);
+  }
+
   Future<void> insertPosition(PositionDataEntity data) async {
     try {
       await database
